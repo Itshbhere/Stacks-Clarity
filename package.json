@@ -1,5 +1,5 @@
 {
   "dependencies": {
-    "stacks.js": "^0.0.8"
+    "create-vitewind": "^1.0.6"
   }
 }
