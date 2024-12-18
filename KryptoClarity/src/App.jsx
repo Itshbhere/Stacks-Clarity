@@ -1,72 +1,55 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { AppConfig, UserSession, showConnect } from "@stacks/connect";
-import { Person } from "@stacks/profile";
-import { StacksMainnet } from "@stacks/network";
-import reactLogo from "./assets/react.svg";
-import vitewindLogo from "./assets/vitewind.svg";
+import { STACKS_TESTNET } from "@stacks/network";
+import { makeContractCall, bufferCVFromString } from "@stacks/transactions";
 
 // Configure the app
 const appConfig = new AppConfig(["store_write", "publish_data"]);
 const userSession = new UserSession({ appConfig });
+const network = STACKS_TESTNET;
 
-// Custom Button Component
-const ConnectButton = ({ children, onClick, isConnected }) => {
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        px-6 py-2 
-        text-lg 
-        font-semibold 
-        rounded-md 
-        transition-all 
-        duration-300 
-        ease-in-out
-        ${
-          isConnected
-            ? "bg-green-600 text-white hover:bg-green-700"
-            : "bg-[#183D3D] text-white hover:bg-[#7B9E8F]"
-        }
-      `}
-    >
-      {children}
-    </button>
-  );
+// Your deployed contract details
+const TOKEN_CONTRACT = {
+  address: "ST1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H3CK5ACA",
+  name: "Token",
+  tokenName: "krypt-token",
 };
 
 function App() {
   const [userData, setUserData] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState(null);
 
   useEffect(() => {
-    // Check if already logged in
-    if (userSession.isUserSignedIn()) {
-      const userData = userSession.loadUserData();
-      setUserData(userData);
-      setIsConnected(true);
-    } else if (userSession.isSignInPending()) {
+    if (userSession.isSignInPending()) {
       userSession.handlePendingSignIn().then((userData) => {
         setUserData(userData);
         setIsConnected(true);
+        checkTokenBalance(userData.profile.stxAddress.testnet);
       });
+    } else if (userSession.isUserSignedIn()) {
+      const userData = userSession.loadUserData();
+      setUserData(userData);
+      setIsConnected(true);
+      checkTokenBalance(userData.profile.stxAddress.testnet);
     }
   }, []);
 
   const connectWallet = () => {
     showConnect({
       userSession,
-      network: StacksMainnet,
       appDetails: {
-        name: "ViteWind Stacks App",
-        icon: window.location.origin + vitewindLogo,
+        name: "Token Balance App",
+        icon: window.location.origin + "/logo.svg",
       },
       onFinish: () => {
         const userData = userSession.loadUserData();
         setUserData(userData);
         setIsConnected(true);
+        checkTokenBalance(userData.profile.stxAddress.testnet);
       },
       onCancel: () => {
-        console.log("Login canceled");
+        console.log("Connection canceled");
       },
     });
   };
@@ -75,61 +58,76 @@ function App() {
     userSession.signUserOut();
     setUserData(null);
     setIsConnected(false);
+    setTokenBalance(null);
   };
 
-  const handleConnect = () => {
-    if (!isConnected) {
-      connectWallet();
-    } else {
-      disconnectWallet();
+  const checkTokenBalance = async (address) => {
+    if (!address) {
+      alert("No address available");
+      return;
+    }
+
+    try {
+      const network = STACKS_TESTNET;
+
+      const txOptions = {
+        contractAddress: TOKEN_CONTRACT.address,
+        contractName: TOKEN_CONTRACT.name,
+        functionName: "get-balance",
+        functionArgs: [bufferCVFromString(address)],
+        network,
+      };
+
+      const transaction = await makeContractCall(txOptions);
+
+      // Note: Since get-balance is a read-only function,
+      // you'll need to parse the response carefully
+      const balanceResponse = await transaction.payload.functionArgs[0];
+
+      // Assuming the contract returns an ok response with the balance
+      if (balanceResponse) {
+        setTokenBalance(balanceResponse.toString());
+      } else {
+        setTokenBalance("0");
+      }
+    } catch (error) {
+      console.error("Error checking token balance:", error);
+      alert("Failed to check token balance");
+      setTokenBalance("Unable to retrieve balance");
     }
   };
 
   return (
-    <div className="w-full h-screen bg-[#040D12] flex flex-col items-center justify-center gap-4 text-[#93B1A6]">
-      <div className="flex items-center gap-12 select-none">
-        <a
-          href="https://vitewind.pages.dev"
-          target="_blank"
-          rel="noreferrer"
-          className="transition-all duration-200 hover:drop-shadow-[0_0_40px_rgba(92,131,116,0.6)]"
-        >
-          <img src={vitewindLogo} alt="vitewind logo" className="w-32 h-32" />
-        </a>
-        <a
-          href="https://reactjs.org/"
-          target="_blank"
-          rel="noreferrer"
-          className="transition-all duration-200 hover:drop-shadow-[0_0_40px_rgba(92,131,116,0.6)]"
-        >
-          <img src={reactLogo} alt="react logo" className="w-32 h-32" />
-        </a>
-      </div>
-      <h1 className="mt-4 text-5xl font-semibold">ViteWind + React + Stacks</h1>
-      <div className="flex flex-col items-center justify-center gap-4 text-center mt-8">
-        <ConnectButton onClick={handleConnect} isConnected={isConnected}>
-          {isConnected ? "Disconnect" : "Connect Stacks Wallet"}
-        </ConnectButton>
-        {isConnected && userData && (
-          <div className="text-sm text-[#93B1A6]">
-            Connected Address:
-            <code className="ml-2 px-2 py-1 bg-[#183D3D] rounded-sm">
-              {userData.profile.stxAddress.mainnet.slice(0, 6)}...
-              {userData.profile.stxAddress.mainnet.slice(-4)}
-            </code>
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <h1 className="text-3xl font-bold mb-6 text-center">
+          Stacks Token Balance
+        </h1>
+
+        {!isConnected ? (
+          <button
+            onClick={connectWallet}
+            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
+          >
+            Connect Wallet
+          </button>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-gray-800 p-4 rounded">
+              <h2 className="text-xl font-semibold mb-2">Wallet Details</h2>
+              <p>Address: {userData.profile.stxAddress.testnet}</p>
+              <p>Token Balance: {tokenBalance || "Loading..."}</p>
+            </div>
+
+            <button
+              onClick={disconnectWallet}
+              className="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700 transition"
+            >
+              Disconnect Wallet
+            </button>
           </div>
         )}
-        <p className="text-sm text-[#93B1A6]">
-          Edit{" "}
-          <code className="px-1 py-1 text-sm font-semibold text-white bg-[#183D3D] rounded-sm">
-            src/App.jsx
-          </code>{" "}
-          and save to test HMR
-        </p>
       </div>
-      <p className="mt-8 text-[#93B1A6]">
-        Click on the ViteWind and React logos to learn more
-      </p>
     </div>
   );
 }
