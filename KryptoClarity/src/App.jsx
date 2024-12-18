@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { AppConfig, UserSession, showConnect } from "@stacks/connect";
+import { Person } from "@stacks/profile";
+import { StacksMainnet } from "@stacks/network";
 import reactLogo from "./assets/react.svg";
 import vitewindLogo from "./assets/vitewind.svg";
+
+// Configure the app
+const appConfig = new AppConfig(["store_write", "publish_data"]);
+const userSession = new UserSession({ appConfig });
 
 // Custom Button Component
 const ConnectButton = ({ children, onClick, isConnected }) => {
@@ -17,7 +24,7 @@ const ConnectButton = ({ children, onClick, isConnected }) => {
         ease-in-out
         ${
           isConnected
-            ? "bg-gray-500 text-white hover:bg-gray-600"
+            ? "bg-green-600 text-white hover:bg-green-700"
             : "bg-[#183D3D] text-white hover:bg-[#7B9E8F]"
         }
       `}
@@ -28,10 +35,54 @@ const ConnectButton = ({ children, onClick, isConnected }) => {
 };
 
 function App() {
+  const [userData, setUserData] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
+  useEffect(() => {
+    // Check if already logged in
+    if (userSession.isUserSignedIn()) {
+      const userData = userSession.loadUserData();
+      setUserData(userData);
+      setIsConnected(true);
+    } else if (userSession.isSignInPending()) {
+      userSession.handlePendingSignIn().then((userData) => {
+        setUserData(userData);
+        setIsConnected(true);
+      });
+    }
+  }, []);
+
+  const connectWallet = () => {
+    showConnect({
+      userSession,
+      network: StacksMainnet,
+      appDetails: {
+        name: "ViteWind Stacks App",
+        icon: window.location.origin + vitewindLogo,
+      },
+      onFinish: () => {
+        const userData = userSession.loadUserData();
+        setUserData(userData);
+        setIsConnected(true);
+      },
+      onCancel: () => {
+        console.log("Login canceled");
+      },
+    });
+  };
+
+  const disconnectWallet = () => {
+    userSession.signUserOut();
+    setUserData(null);
+    setIsConnected(false);
+  };
+
   const handleConnect = () => {
-    setIsConnected(!isConnected);
+    if (!isConnected) {
+      connectWallet();
+    } else {
+      disconnectWallet();
+    }
   };
 
   return (
@@ -54,11 +105,20 @@ function App() {
           <img src={reactLogo} alt="react logo" className="w-32 h-32" />
         </a>
       </div>
-      <h1 className="mt-4 text-5xl font-semibold">ViteWind + React</h1>
+      <h1 className="mt-4 text-5xl font-semibold">ViteWind + React + Stacks</h1>
       <div className="flex flex-col items-center justify-center gap-4 text-center mt-8">
         <ConnectButton onClick={handleConnect} isConnected={isConnected}>
-          {isConnected ? "Disconnect" : "Connect"}
+          {isConnected ? "Disconnect" : "Connect Stacks Wallet"}
         </ConnectButton>
+        {isConnected && userData && (
+          <div className="text-sm text-[#93B1A6]">
+            Connected Address:
+            <code className="ml-2 px-2 py-1 bg-[#183D3D] rounded-sm">
+              {userData.profile.stxAddress.mainnet.slice(0, 6)}...
+              {userData.profile.stxAddress.mainnet.slice(-4)}
+            </code>
+          </div>
+        )}
         <p className="text-sm text-[#93B1A6]">
           Edit{" "}
           <code className="px-1 py-1 text-sm font-semibold text-white bg-[#183D3D] rounded-sm">
