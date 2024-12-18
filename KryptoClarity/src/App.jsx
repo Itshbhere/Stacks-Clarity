@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { AppConfig, UserSession, showConnect } from "@stacks/connect";
 import { STACKS_TESTNET } from "@stacks/network";
-import { makeContractCall, bufferCVFromString } from "@stacks/transactions";
+import {
+  makeContractCall,
+  standardPrincipalCV,
+  bufferCVFromString,
+  fetchCallReadOnlyFunction,
+} from "@stacks/transactions";
 
 // Configure the app
 const appConfig = new AppConfig(["store_write", "publish_data"]);
@@ -70,29 +75,35 @@ function App() {
     try {
       const network = STACKS_TESTNET;
 
-      const txOptions = {
+      const options = {
         contractAddress: TOKEN_CONTRACT.address,
         contractName: TOKEN_CONTRACT.name,
         functionName: "get-balance",
-        functionArgs: [bufferCVFromString(address)],
+        functionArgs: [standardPrincipalCV(address)],
         network,
+        senderAddress: address, // Use the same address as sender
       };
 
-      const transaction = await makeContractCall(txOptions);
+      const result = await fetchCallReadOnlyFunction(options);
 
-      // Note: Since get-balance is a read-only function,
-      // you'll need to parse the response carefully
-      const balanceResponse = await transaction.payload.functionArgs[0];
+      // Parse the result based on your contract's return type
+      console.log("Balance result:", result);
 
-      // Assuming the contract returns an ok response with the balance
-      if (balanceResponse) {
-        setTokenBalance(balanceResponse.toString());
+      // Assuming the contract returns an 'ok' response with the balance
+      if (result && result.value) {
+        setTokenBalance(result.value.toString());
       } else {
         setTokenBalance("0");
       }
     } catch (error) {
-      console.error("Error checking token balance:", error);
-      alert("Failed to check token balance");
+      console.error("Error checking token balance:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        details: JSON.stringify(error, null, 2),
+      });
+
+      alert(`Failed to check token balance: ${error.message}`);
       setTokenBalance("Unable to retrieve balance");
     }
   };
