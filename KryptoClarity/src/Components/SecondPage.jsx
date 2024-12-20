@@ -3,6 +3,7 @@ import {
   privateKeyToPublic,
   getAddressFromPublicKey,
   getAddressFromPrivateKey,
+  validateStacksAddress,
 } from "@stacks/transactions";
 import { STACKS_TESTNET, STACKS_MAINNET } from "@stacks/network";
 import { generateWallet, getStxAddress } from "@stacks/wallet-sdk";
@@ -44,12 +45,19 @@ const WalletCreator = () => {
         mainnetAddress,
       });
 
-      const PublicKey = getAddressFromPrivateKey(account.stxPrivateKey);
+      const PublicKey = getAddressFromPrivateKey(
+        account.stxPrivateKey,
+        STACKS_TESTNET
+      );
       const FinalAddres =
         "03a827ac391745d499a80c0350902cfce8ce948b35e81c902248f915cf1be63df6";
+      const VALIDATION = validateStacksAddress(
+        "ST33Y26J2EZW5SJSDRKFJVE97P40ZYYR7K3PATCNF"
+      );
 
       // Log the information
       console.log("Wallet Created:", {
+        VALIDATION,
         FinalAddres,
         PublicKey,
         account,
