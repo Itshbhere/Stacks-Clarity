@@ -1,5 +1,9 @@
 import React, { useState } from "react";
-import { privateKeyToPublic } from "@stacks/transactions";
+import {
+  privateKeyToPublic,
+  getAddressFromPublicKey,
+  getAddressFromPrivateKey,
+} from "@stacks/transactions";
 import { STACKS_TESTNET, STACKS_MAINNET } from "@stacks/network";
 import { generateWallet, getStxAddress } from "@stacks/wallet-sdk";
 
@@ -40,10 +44,13 @@ const WalletCreator = () => {
         mainnetAddress,
       });
 
-      const PublicKey = privateKeyToPublic(account.stxPrivateKey);
+      const PublicKey = getAddressFromPrivateKey(account.stxPrivateKey);
+      const FinalAddres =
+        "03a827ac391745d499a80c0350902cfce8ce948b35e81c902248f915cf1be63df6";
 
       // Log the information
       console.log("Wallet Created:", {
+        FinalAddres,
         PublicKey,
         account,
         secretPhrase,
