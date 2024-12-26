@@ -1,5 +1,11 @@
 (impl-trait .trait-ownable.ownable-trait)
-(use-trait ft-trait .trait-sip-010.sip-010-trait)
+;; (use-trait ft-trait .trait-sip-010.sip-010-trait)
+;; ;; Import the required contracts
+;; (use-trait ft-trait .sip-010-trait-ft-standard.sip-010-trait)
+
+;; Define constant for contract reference
+(define-constant token-amm-swap-pool .token-amm-swap-pool)
+(define-constant alex-vault .alex-vault)
 
 ;; amm-swap-pool
 ;; uses the constant power sum formula whose "factor" determines 
@@ -52,10 +58,14 @@
 )
 
 (define-public (set-contract-owner (owner principal))
-  (begin
-    (try! (check-is-owner))
-    (asserts! (is-principal owner) ERR-NOT-AUTHORIZED)
-    (ok (var-set contract-owner owner))
+  (let 
+    (
+      (current-owner (var-get contract-owner))
+    )
+    (asserts! (is-eq tx-sender current-owner) (err u100))
+    (asserts! (is-some owner) (err u101))
+    (var-set contract-owner owner)
+    (ok true)
   )
 )
 
@@ -293,7 +303,7 @@
             })
         )
         (asserts! (not (is-paused)) ERR-PAUSED)
-        (asserts! (is-principal pool-owner) ERR-NOT-AUTHORIZED)
+        (asserts! (is-eq tx-sender pool-owner) ERR-NOT-AUTHORIZED)
         (asserts!
             (and
                 (is-none (map-get? pools-data-map { token-x: token-x, token-y: token-y, factor: factor }))
@@ -311,18 +321,32 @@
     )
 )
 
-(define-public (add-to-position (token-x-trait <ft-trait>) (token-y-trait <ft-trait>) (factor uint) (dx uint) (max-dy (optional uint)))
+;; Define the pool trait
+(define-trait pool-trait
+    (
+        (mint-fixed (uint uint principal) (response bool uint))
+    )
+)
+
+(define-public (add-to-position 
+    (token-x-trait <ft-trait>) 
+    (token-y-trait <ft-trait>)
+    (pool-trait <pool-trait>) 
+    (factor uint) 
+    (dx uint) 
+    (max-dy (optional uint))
+)
     (let
         (
             (token-x (contract-of token-x-trait))
             (token-y (contract-of token-y-trait))
             (pool (try! (get-pool-details token-x token-y factor)))
-            (balance-x (get balance-x pool))
-            (balance-y (get balance-y pool))
-            (total-supply (get total-supply pool))
             (add-data (try! (get-token-given-position token-x token-y factor dx max-dy)))
             (new-supply (get token add-data))
             (dy (get dy add-data))
+            (balance-x (get balance-x pool))
+            (balance-y (get balance-y pool))
+            (total-supply (get total-supply pool))
             (pool-updated (merge pool {
                 total-supply: (+ new-supply total-supply),
                 balance-x: (+ balance-x dx),
@@ -330,27 +354,48 @@
             }))
             (sender tx-sender)
         )
-        (asserts! (not (is-paused)) ERR-PAUSED)
-        (asserts! (and (> dx u0) (> dy u0)) ERR-INVALID-LIQUIDITY)
-        (asserts! (>= (default-to u340282366920938463463374607431768211455 max-dy) dy) ERR-EXCEEDS-MAX-SLIPPAGE)
+        (asserts! (not (is-paused)) (err u1000))
+        (asserts! (and (> dx u0) (> dy u0)) (err u1001))
+        (asserts! (>= (default-to u340282366920938463463374607431768211455 max-dy) dy) (err u1002))
+        
         (try! (contract-call? token-x-trait transfer-fixed dx sender .alex-vault none))
         (try! (contract-call? token-y-trait transfer-fixed dy sender .alex-vault none))
-        (map-set pools-data-map { token-x: token-x, token-y: token-y, factor: factor } pool-updated)
-        (as-contract (try! (contract-call? .token-amm-swap-pool mint-fixed (get pool-id pool) new-supply sender)))
-        (print { object: "pool", action: "liquidity-added", data: pool-updated })
-        (ok {supply: new-supply, dx: dx, dy: dy})
+        
+        (map-set pools-data-map 
+            { token-x: token-x, token-y: token-y, factor: factor } 
+            pool-updated
+        )
+        
+        (as-contract 
+            (try! (contract-call? pool-trait mint-fixed 
+                (get pool-id pool) 
+                new-supply 
+                sender
+            ))
+        )
+        
+        (print { 
+            object: "pool", 
+            action: "liquidity-added", 
+            data: pool-updated 
+        })
+        
+        (ok {
+            supply: new-supply, 
+            dx: dx, 
+            dy: dy
+        })
     )
 )
 
 (define-public (reduce-position (token-x-trait <ft-trait>) (token-y-trait <ft-trait>) (factor uint) (percent uint))
-    (let
-        (
+    (let (
             (token-x (contract-of token-x-trait))
             (token-y (contract-of token-y-trait))
             (pool (try! (get-pool-details token-x token-y factor)))
             (balance-x (get balance-x pool))
             (balance-y (get balance-y pool))
-            (total-shares (unwrap-panic (contract-call? .token-amm-swap-pool get-balance-fixed (get pool-id pool) tx-sender)))
+            (total-shares (unwrap-panic (contract-call? token-amm-swap-pool get-balance-fixed (get pool-id pool) tx-sender)))
             (shares (if (is-eq percent ONE_8) total-shares (mul-down total-shares percent)))
             (total-supply (get total-supply pool))
             (reduce-data (try! (get-position-given-burn token-x token-y factor shares)))
@@ -360,53 +405,88 @@
                 total-supply: (if (<= total-supply shares) u0 (- total-supply shares)),
                 balance-x: (if (<= balance-x dx) u0 (- balance-x dx)),
                 balance-y: (if (<= balance-y dy) u0 (- balance-y dy))
-                })
-            )
+            }))
             (sender tx-sender)
-        )  
-        (asserts! (not (is-paused)) ERR-PAUSED)       
-        (asserts! (<= percent ONE_8) ERR-PERCENT-GREATER-THAN-ONE)
-        (as-contract (try! (contract-call? .alex-vault transfer-ft-two token-x-trait dx token-y-trait dy sender)))
-        (map-set pools-data-map { token-x: token-x, token-y: token-y, factor: factor } pool-updated)
-        (as-contract (try! (contract-call? .token-amm-swap-pool burn-fixed (get pool-id pool) shares sender)))
-        (print { object: "pool", action: "liquidity-removed", data: pool-updated })
-        (ok {dx: dx, dy: dy})
+        )
+        (begin
+            (asserts! (not (is-paused)) ERR-PAUSED)       
+            (asserts! (<= percent ONE_8) ERR-PERCENT-GREATER-THAN-ONE)
+            (as-contract (try! (contract-call? alex-vault transfer-ft-two token-x-trait dx token-y-trait dy sender)))
+            (map-set pools-data-map { token-x: token-x, token-y: token-y, factor: factor } pool-updated)
+            (as-contract (try! (contract-call? token-amm-swap-pool burn-fixed (get pool-id pool) shares sender)))
+            (print { object: "pool", action: "liquidity-removed", data: pool-updated })
+            (ok {dx: dx, dy: dy})
+        )
     )
 )
+
+;; Define contract constants
+(define-constant alex-vault .alex-vault)
+(define-constant alex-reserve-pool .alex-reserve-pool)
 
 (define-public (swap-x-for-y (token-x-trait <ft-trait>) (token-y-trait <ft-trait>) (factor uint) (dx uint) (min-dy (optional uint)))
     (let
         (
             (token-x (contract-of token-x-trait))
             (token-y (contract-of token-y-trait))
+            ;; Get pool details first and validate pool status
             (pool (try! (get-pool-details token-x token-y factor)))
             (balance-x (get balance-x pool))
             (balance-y (get balance-y pool))
+            ;; Calculate fees and net amount
             (fee (mul-up dx (get fee-rate-x pool)))
             (dx-net-fees (if (<= dx fee) u0 (- dx fee)))
             (fee-rebate (mul-down fee (get fee-rebate pool)))
-            (dy (try! (get-y-given-x token-x token-y factor dx-net-fees)))                
+            ;; Calculate output amount
+            (dy (try! (get-y-given-x token-x token-y factor dx-net-fees)))
+            ;; Update pool state
             (pool-updated (merge pool {
                 balance-x: (+ balance-x dx-net-fees fee-rebate),
                 balance-y: (if (<= balance-y dy) u0 (- balance-y dy)),
-                oracle-resilient: (if (get oracle-enabled pool) (try! (get-oracle-resilient token-x token-y factor)) u0)
-                })
-            )
+                oracle-resilient: (if (get oracle-enabled pool) 
+                    (try! (get-oracle-resilient token-x token-y factor)) 
+                    u0)
+            }))
             (sender tx-sender)             
         )
-        (asserts! (not (is-paused)) ERR-PAUSED)
-        (try! (check-pool-status token-x token-y factor))
-        (asserts! (> dx u0) ERR-INVALID-LIQUIDITY)
-        (asserts! (<= (div-down dy dx-net-fees) (get-price-internal balance-x balance-y factor)) ERR-INVALID-LIQUIDITY)
-        (asserts! (<= (default-to u0 min-dy) dy) ERR-EXCEEDS-MAX-SLIPPAGE)
-        (try! (contract-call? token-x-trait transfer-fixed dx sender .alex-vault none))
-        (and (> dy u0) (as-contract (try! (contract-call? .alex-vault transfer-ft token-y-trait dy sender))))
-        (as-contract (try! (contract-call? .alex-reserve-pool add-to-balance token-x (- fee fee-rebate))))
-        (map-set pools-data-map { token-x: token-x, token-y: token-y, factor: factor } pool-updated)
-        (print { object: "pool", action: "swap-x-for-y", data: pool-updated })
-        (ok {dx: dx-net-fees, dy: dy})
+        (begin
+            ;; Initial validations
+            (asserts! (not (is-paused)) ERR-PAUSED)
+            (try! (check-pool-status token-x token-y factor))
+            
+            ;; Input validation
+            (asserts! (> dx u0) ERR-INVALID-LIQUIDITY)
+            (asserts! (> dy u0) ERR-INVALID-LIQUIDITY)
+            
+            ;; Price impact and slippage checks
+            (asserts! (<= (div-down dy dx-net-fees) (get-price-internal balance-x balance-y factor)) ERR-INVALID-LIQUIDITY)
+            (asserts! (<= (default-to u0 min-dy) dy) ERR-EXCEEDS-MAX-SLIPPAGE)
+            
+            ;; Execute transfers
+            (try! (contract-call? token-x-trait transfer-fixed dx sender alex-vault none))
+            (as-contract (try! (contract-call? alex-vault transfer-ft token-y-trait dy sender)))
+            
+            ;; Handle fees
+            (as-contract (try! (contract-call? alex-reserve-pool add-to-balance token-x (- fee fee-rebate))))
+            
+            ;; Update pool state
+            (map-set pools-data-map { token-x: token-x, token-y: token-y, factor: factor } pool-updated)
+            
+            ;; Emit event
+            (print { object: "pool", action: "swap-x-for-y", data: pool-updated })
+            
+            ;; Return success with amounts
+            (ok {dx: dx-net-fees, dy: dy})
+        )
     )
 )
+
+
+(define-constant contract-owner tx-sender)
+
+;; Define the alex-vault contract principal
+(define-constant alex-vault-contract (as-contract 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.alex-vault))
+(define-constant alex-reserve-pool-contract (as-contract 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.alex-reserve-pool))
 
 (define-public (swap-y-for-x (token-x-trait <ft-trait>) (token-y-trait <ft-trait>) (factor uint) (dy uint) (min-dx (optional uint)))
     (let
@@ -433,9 +513,9 @@
         (asserts! (> dy u0) ERR-INVALID-LIQUIDITY)        
         (asserts! (>= (div-down dy-net-fees dx) (get-price-internal balance-x balance-y factor)) ERR-INVALID-LIQUIDITY)
         (asserts! (<= (default-to u0 min-dx) dx) ERR-EXCEEDS-MAX-SLIPPAGE)        
-        (try! (contract-call? token-y-trait transfer-fixed dy sender .alex-vault none))
-        (and (> dx u0) (as-contract (try! (contract-call? .alex-vault transfer-ft token-x-trait dx sender))))            
-        (as-contract (try! (contract-call? .alex-reserve-pool add-to-balance token-y (- fee fee-rebate))))
+        (try! (contract-call? token-y-trait transfer-fixed dy sender alex-vault-contract none))
+        (and (> dx u0) (as-contract (try! (contract-call? alex-vault-contract transfer-ft token-x-trait dx sender))))            
+        (as-contract (try! (contract-call? alex-reserve-pool-contract add-to-balance token-y (- fee fee-rebate))))
         (map-set pools-data-map { token-x: token-x, token-y: token-y, factor: factor } pool-updated)
         (print { object: "pool", action: "swap-y-for-x", data: pool-updated })
         (ok {dx: dx, dy: dy-net-fees})
@@ -482,8 +562,8 @@
             (pool (try! (get-pool-details token-x token-y factor)))
         )
         (try! (check-is-owner))
-        (asserts! (is-principal token-x) ERR-NOT-AUTHORIZED)
-        (asserts! (is-principal token-y) ERR-NOT-AUTHORIZED)
+        (asserts! (is-eq tx-sender token-x) ERR-NOT-AUTHORIZED)
+        (asserts! (is-eq tx-sender token-y) ERR-NOT-AUTHORIZED)
         (map-set pools-data-map { token-x: token-x, token-y: token-y, factor: factor } (merge pool { fee-rebate: fee-rebate }))
         (ok true)     
     )
@@ -529,9 +609,9 @@
             (pool (try! (get-pool-details token-x token-y factor)))
         )
         (try! (check-is-owner))
-        (asserts! (is-principal token-x) ERR-NOT-AUTHORIZED)
-        (asserts! (is-principal token-y) ERR-NOT-AUTHORIZED)
-        (asserts! (is-principal pool-owner) ERR-NOT-AUTHORIZED)
+        (asserts! (is-eq tx-sender token-x) ERR-NOT-AUTHORIZED)
+        (asserts! (is-eq tx-sender token-y) ERR-NOT-AUTHORIZED)
+        (asserts! (is-eq tx-sender pool-owner) ERR-NOT-AUTHORIZED)
         (map-set pools-data-map { token-x: token-x, token-y: token-y, factor: factor } (merge pool { pool-owner: pool-owner }))
         (ok true)     
     )
@@ -675,8 +755,13 @@
     (token-x-trait <ft-trait>) (token-y-trait <ft-trait>) (token-z-trait <ft-trait>) (token-w-trait <ft-trait>) (token-v-trait <ft-trait>)
     (factor-x uint) (factor-y uint) (factor-z uint) (factor-w uint)
     (dx uint) (min-dv (optional uint)))
-    (swap-helper-a token-z-trait token-w-trait token-v-trait factor-z factor-w
-        (try! (swap-helper-a token-x-trait token-y-trait token-z-trait factor-x factor-y dx none)) min-dv)
+    (let 
+        (
+            (first-swap (try! (swap-helper-a token-x-trait token-y-trait token-z-trait factor-x factor-y dx none)))
+            (dz (get amount-out first-swap))
+        )
+        (swap-helper-a token-z-trait token-w-trait token-v-trait factor-z factor-w dz min-dv)
+    )
 )
 
 (define-read-only (get-helper (token-x principal) (token-y principal) (factor uint) (dx uint))
