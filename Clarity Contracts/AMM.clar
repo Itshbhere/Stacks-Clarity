@@ -63,8 +63,8 @@
       (current-owner (var-get contract-owner))
     )
     (asserts! (is-eq tx-sender current-owner) (err u100))
-    (asserts! (is-some owner) (err u101))
-    (var-set contract-owner owner)
+    ;; (asserts! (is-some owner) (err u101))
+    ;; (var-set contract-owner owner)
     (ok true)
   )
 )
@@ -171,11 +171,20 @@
 (define-read-only (check-pool-status (token-x principal) (token-y principal) (factor uint))
     (let
         (
-            (pool (try! (get-pool-details token-x token-y factor)))
+            (pool (unwrap! (get-pool-details token-x token-y factor) (err ERR-NOT-AUTHORIZED)))
+            (current-block-height (unwrap! (get-block-info? "block-height" u0) (err ERR-GET-BLOCK-INFO)))
         )
-        (ok (asserts! (and (>= block-height (get start-block pool)) (<= block-height (get end-block pool))) ERR-NOT-AUTHORIZED))
+        (asserts! 
+            (and 
+                (>= current-block-height (get start-block pool))
+                (<= current-block-height (get end-block pool))
+            )
+            ERR-NOT-AUTHORIZED
+        )
     )
 )
+
+
 
 (define-read-only (get-oracle-enabled (token-x principal) (token-y principal) (factor uint))
     (ok (get oracle-enabled (try! (get-pool-details token-x token-y factor))))
@@ -482,7 +491,7 @@
 )
 
 
-(define-constant contract-owner tx-sender)
+;; (define-constant contract-owner tx-sender)
 
 ;; Define the alex-vault contract principal
 (define-constant alex-vault-contract (as-contract 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.alex-vault))
@@ -751,10 +760,22 @@
         (try! (swap-helper-a token-x-trait token-y-trait token-z-trait factor-x factor-y dx none)) none)
 )
 
+;; First, define or import the ft-trait
+(use-trait ft-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
+
+;; Now define your function with the properly imported trait
 (define-public (swap-helper-c
-    (token-x-trait <ft-trait>) (token-y-trait <ft-trait>) (token-z-trait <ft-trait>) (token-w-trait <ft-trait>) (token-v-trait <ft-trait>)
-    (factor-x uint) (factor-y uint) (factor-z uint) (factor-w uint)
-    (dx uint) (min-dv (optional uint)))
+    (token-x-trait <ft-trait>) 
+    (token-y-trait <ft-trait>) 
+    (token-z-trait <ft-trait>) 
+    (token-w-trait <ft-trait>) 
+    (token-v-trait <ft-trait>)
+    (factor-x uint) 
+    (factor-y uint) 
+    (factor-z uint) 
+    (factor-w uint)
+    (dx uint) 
+    (min-dv (optional uint)))
     (let 
         (
             (first-swap (try! (swap-helper-a token-x-trait token-y-trait token-z-trait factor-x factor-y dx none)))
