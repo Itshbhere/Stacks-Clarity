@@ -1,18 +1,9 @@
 (impl-trait .trait-ownable.ownable-trait)
-;; (use-trait ft-trait .trait-sip-010.sip-010-trait)
-;; ;; Import the required contracts
-;; (use-trait ft-trait .sip-010-trait-ft-standard.sip-010-trait)
-
-;; Define constant for contract reference
 (define-constant token-amm-swap-pool .token-amm-swap-pool)
 (define-constant alex-vault .alex-vault)
 
-;; amm-swap-pool
-;; uses the constant power sum formula whose "factor" determines 
-;; how far (or close) you are from (or to) constant product (aka Uniswap) and constant sum (aka mStable)
-;; this can be seen as the generalised formulation of Curve AMM.
+
 ;; based on Trading Pool AMM (https://cdn.alexlab.co/pdf/ALEXGo_TradingPool.pdf)
-;; factor => 1 gives you Uniswap, and factor => 0 gives you mStable. In-between, Curve.
 
 (define-constant ERR-NOT-AUTHORIZED (err u1000))
 (define-constant ERR-INVALID-POOL (err u2001))
