@@ -16,7 +16,6 @@ async function monitorTokenTransfers(walletAddress, tokenMintAddress) {
       commitment: "confirmed",
       wsEndpoint: clusterApiUrl("devnet").replace("https", "wss"),
       confirmTransactionInitialTimeout: 60000,
-      // Rate limiting configuration
       httpHeaders: {
         "solana-client": `token-monitor-${Date.now()}`,
       },
@@ -40,6 +39,17 @@ async function monitorTokenTransfers(walletAddress, tokenMintAddress) {
       `Found ${tokenAccounts.value.length} token accounts to monitor`
     );
 
+    // Store previous balances for each token account
+    const previousBalances = new Map();
+
+    // Initialize previous balances
+    for (const tokenAccount of tokenAccounts.value) {
+      previousBalances.set(
+        tokenAccount.pubkey.toString(),
+        tokenAccount.account.data.parsed.info.tokenAmount.uiAmount
+      );
+    }
+
     // Keep track of last processed slot to avoid duplicates
     let lastProcessedSlot = 0;
 
@@ -62,12 +72,27 @@ async function monitorTokenTransfers(walletAddress, tokenMintAddress) {
 
               const parsedData = tokenAccountInfo.value?.data.parsed;
               if (parsedData?.info?.mint === mintPubKey.toString()) {
+                const currentBalance = parsedData.info.tokenAmount.uiAmount;
+                const previousBalance = previousBalances.get(
+                  tokenAccount.pubkey.toString()
+                );
+                const transferAmount = currentBalance - previousBalance;
+
+                // Update stored balance
+                previousBalances.set(
+                  tokenAccount.pubkey.toString(),
+                  currentBalance
+                );
+
                 console.log("\nToken Transfer Detected!");
                 console.log("Slot:", context.slot);
                 console.log("Account:", tokenAccount.pubkey.toString());
+                console.log("Previous Balance:", previousBalance);
+                console.log("Current Balance:", currentBalance);
                 console.log(
-                  "Updated Balance:",
-                  parsedData.info.tokenAmount.uiAmount
+                  `Transfer Amount: ${Math.abs(transferAmount)} ${
+                    transferAmount > 0 ? "(RECEIVED)" : "(SENT)"
+                  }`
                 );
                 console.log("Timestamp:", new Date().toLocaleString());
 
@@ -90,9 +115,19 @@ async function monitorTokenTransfers(walletAddress, tokenMintAddress) {
                         commitment: "confirmed",
                       }
                     );
+
+                    // Get sender and receiver addresses from transaction logs
+                    const logs = transaction?.meta?.logMessages || [];
+                    const transferLog = logs.find((log) =>
+                      log.includes("Transfer")
+                    );
+                    if (transferLog) {
+                      console.log("Transfer Log:", transferLog);
+                    }
+
                     console.log(
-                      "Transfer Details:",
-                      JSON.stringify(transaction?.meta?.logMessages, null, 2)
+                      "Transaction Signature:",
+                      signatures[0].signature
                     );
                   }
                 } catch (error) {
