@@ -3,10 +3,12 @@
   "dependencies": {
     "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.98.0",
+    "@stacks/network": "^7.0.2",
+    "@stacks/transactions": "^7.0.2",
     "@types/node": "^22.10.2",
+    "create-vitewind": "^1.0.6",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.2",
-    "create-vitewind": "^1.0.6"
+    "typescript": "^5.7.2"
   },
   "name": "solana",
   "version": "1.0.0",
@@ -17,6 +19,5 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devDependencies": {},
   "description": ""
 }
