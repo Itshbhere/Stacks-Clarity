@@ -81,29 +81,6 @@ const TokenTransfer = () => {
     return numAmount > 0 && Number.isInteger(numAmount);
   };
 
-  //   const broadcastTransaction = async (transaction) => {
-  //     const serializedTxHex = transaction.serialize(); // This now returns hex string
-  //     try {
-  //       const response = await fetch(`${network}/v2/transactions`, {
-  //         method: "POST",
-  //         headers: {
-  //           "Content-Type": "application/x-www-form-urlencoded",
-  //         },
-  //         body: serializedTxHex,
-  //       });
-
-  //       if (!response.ok) {
-  //         const errorData = await response.json();
-  //         throw new Error(errorData.error || "Failed to broadcast transaction");
-  //       }
-
-  //       return await response.json();
-  //     } catch (error) {
-  //       console.error("Broadcasting error:", error);
-  //       throw error;
-  //     }
-  //   };
-
   const handleTransfer = async () => {
     try {
       setLoading(true);
