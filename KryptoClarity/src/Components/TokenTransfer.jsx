@@ -10,7 +10,7 @@ import {
   validateStacksAddress,
   broadcastTransaction,
 } from "@stacks/transactions";
-import { STACKS_TESTNET } from "@stacks/network";
+import { STACKS_TESTNET, STACKS_MAINNET } from "@stacks/network";
 
 const TokenTransfer = () => {
   const [recipient, setRecipient] = useState("");
@@ -24,10 +24,10 @@ const TokenTransfer = () => {
 
   const SENDER_KEY =
     "f7984d5da5f2898dc001631453724f7fd44edaabdaa926d7df29e6ae3566492c01";
-  const CONTRACT_ADDRESS = "ST1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H3CK5ACA";
-  const CONTRACT_NAME = "Token";
+  const CONTRACT_ADDRESS = "SP1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H2SAZ7CN";
+  const CONTRACT_NAME = "Krypto";
 
-  const network = STACKS_TESTNET;
+  const network = STACKS_MAINNET;
 
   useEffect(() => {
     try {
@@ -47,7 +47,7 @@ const TokenTransfer = () => {
         return false;
       }
 
-      if (!address.startsWith("ST")) {
+      if (!address.startsWith("SP")) {
         setRecipientError("Invalid address format. Must start with 'ST'");
         return false;
       }
@@ -116,6 +116,7 @@ const TokenTransfer = () => {
         network,
         anchorMode: 3,
         postConditionMode: 1,
+        fee: 2000n,
       };
 
       console.log("Creating contract call...");
@@ -125,7 +126,7 @@ const TokenTransfer = () => {
       console.log("Broadcasting transaction...");
       const broadcastResponse = await broadcastTransaction({
         transaction,
-        network: STACKS_TESTNET,
+        network: STACKS_MAINNET,
       });
       console.log("Broadcast response:", broadcastResponse);
 

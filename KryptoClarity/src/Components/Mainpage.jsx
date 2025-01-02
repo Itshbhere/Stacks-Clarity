@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { AppConfig, UserSession, showConnect } from "@stacks/connect";
-import { STACKS_TESTNET , STACKS_MAINNET} from "@stacks/network";
+import { STACKS_TESTNET, STACKS_MAINNET } from "@stacks/network";
 import {
   standardPrincipalCV,
   fetchCallReadOnlyFunction,
@@ -28,13 +28,13 @@ function App1() {
       userSession.handlePendingSignIn().then((userData) => {
         setUserData(userData);
         setIsConnected(true);
-        checkTokenBalance(userData.profile.stxAddress.testnet);
+        checkTokenBalance(TOKEN_CONTRACT.address);
       });
     } else if (userSession.isUserSignedIn()) {
       const userData = userSession.loadUserData();
       setUserData(userData);
       setIsConnected(true);
-      checkTokenBalance(userData.profile.stxAddress.testnet);
+      checkTokenBalance(TOKEN_CONTRACT.address);
     }
   }, []);
 
@@ -81,6 +81,8 @@ function App1() {
         network,
         senderAddress: address, // Use the same address as sender
       };
+
+      console.log("Checking token balance...", options);
 
       const result = await fetchCallReadOnlyFunction(options);
 
