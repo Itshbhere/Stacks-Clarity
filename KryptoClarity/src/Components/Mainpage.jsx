@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { AppConfig, UserSession, showConnect } from "@stacks/connect";
-import { STACKS_TESTNET } from "@stacks/network";
+import { STACKS_TESTNET , STACKS_MAINNET} from "@stacks/network";
 import {
   standardPrincipalCV,
   fetchCallReadOnlyFunction,
@@ -9,12 +9,12 @@ import {
 // Configure the app
 const appConfig = new AppConfig(["store_write", "publish_data"]);
 const userSession = new UserSession({ appConfig });
-const network = STACKS_TESTNET;
+const network = STACKS_MAINNET;
 
 // Your deployed contract details
 const TOKEN_CONTRACT = {
-  address: "ST1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H3CK5ACA",
-  name: "Token",
+  address: "SP1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H2SAZ7CN",
+  name: "Krypto",
   tokenName: "krypt-token",
 };
 
@@ -71,7 +71,7 @@ function App1() {
     }
 
     try {
-      const network = STACKS_TESTNET;
+      const network = STACKS_MAINNET;
 
       const options = {
         contractAddress: TOKEN_CONTRACT.address,

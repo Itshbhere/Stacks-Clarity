@@ -56,7 +56,7 @@ async function estimateFee() {
 
 async function deployContract() {
   try {
-    const network = new STACKS_MAINNET(); // Instantiate the network object
+    const network = STACKS_MAINNET;
 
     let contractCode;
     try {
