@@ -4,13 +4,12 @@ import { readFileSync } from "fs";
 import { setTimeout } from "timers/promises";
 
 // Retry configuration
-const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff
+const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000];
 const MAX_RETRIES = 5;
+const DEFAULT_FEE = 100000; // Default fee in microSTX (0.1 STX)
 
-// Helper function for delay
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Helper function for API calls with retry logic
 async function fetchWithRetry(fetchFunction, retryCount = 0) {
   try {
     return await fetchFunction();
@@ -29,29 +28,36 @@ async function fetchWithRetry(fetchFunction, retryCount = 0) {
   }
 }
 
-// Function to estimate fee with retries
+// Updated fee estimation function with better error handling
 async function estimateFee() {
   try {
+    // Try the new fee endpoint first
     const response = await fetch(
-      "https://api.mainnet.hiro.so/v2/fees/transaction"
+      "https://stacks-node-api.mainnet.stacks.co/v2/fees/transfer"
     );
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
+
     const data = await response.json();
-    return data.estimated_fee_scalar;
+
+    if (!data.standard) {
+      console.warn("No standard fee rate found, using default fee");
+      return DEFAULT_FEE;
+    }
+
+    return parseInt(data.standard);
   } catch (error) {
-    console.error("Error estimating fee:", error);
-    throw error;
+    console.warn("Error estimating fee, using default fee:", error.message);
+    return DEFAULT_FEE;
   }
 }
 
 async function deployContract() {
   try {
-    // Network configuration
-    const network = STACKS_MAINNET;
+    const network = new STACKS_MAINNET(); // Instantiate the network object
 
-    // Read contract code
     let contractCode;
     try {
       contractCode = readFileSync("./token.clar").toString();
@@ -61,9 +67,8 @@ async function deployContract() {
 
     console.log("Estimating transaction fee...");
     const estimatedFee = await fetchWithRetry(estimateFee);
-    console.log(`Estimated fee: ${estimatedFee}`);
+    console.log(`Using fee: ${estimatedFee} microSTX`);
 
-    // Transaction options
     const txOptions = {
       contractName: "Token",
       codeBody: contractCode,
@@ -72,71 +77,76 @@ async function deployContract() {
       network,
       anchorMode: 3,
       postConditionMode: 1,
-      fee: estimatedFee || 100000, // Use estimated fee or fallback
+      fee: estimatedFee,
     };
 
     console.log("Preparing contract deployment...");
 
-    // Create and broadcast transaction with retry logic
-    const transaction = await fetchWithRetry(() =>
-      makeContractDeploy(txOptions)
-    );
+    const transaction = await makeContractDeploy(txOptions);
     console.log("Broadcasting transaction...");
 
-    const broadcastResponse = await fetchWithRetry(() =>
-      broadcastTransaction(transaction, network)
-    );
+    try {
+      const broadcastResponse = await broadcastTransaction({
+        transaction,
+        network: STACKS_MAINNET,
+      });
 
-    const txId = broadcastResponse.txid;
-    console.log(`Transaction broadcast successful. Transaction ID: ${txId}`);
-
-    // Monitor transaction status with retry logic
-    let status = "pending";
-    let attempts = 0;
-    const maxAttempts = 30;
-
-    while (status === "pending" && attempts < maxAttempts) {
-      attempts++;
-
-      try {
-        const checkStatus = async () => {
-          const response = await fetch(
-            `https://api.mainnet.stacks.co/extended/v1/tx/${txId}`
-          );
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          return response.json();
-        };
-
-        const txInfo = await fetchWithRetry(checkStatus);
-        status = txInfo.tx_status;
-
-        if (status === "success") {
-          console.log("Contract deployment successful!");
-          return {
-            success: true,
-            txId,
-            contractId: `${txOptions.senderKey}.${txOptions.contractName}`,
-          };
-        } else if (status === "failed") {
-          throw new Error(
-            `Transaction failed: ${txInfo.tx_result?.repr || "Unknown error"}`
-          );
-        }
-
-        console.log(
-          `Waiting for confirmation... (Attempt ${attempts}/${maxAttempts})`
-        );
-        await delay(10000);
-      } catch (error) {
-        console.warn(`Failed to check transaction status: ${error.message}`);
-        await delay(10000);
+      if (!broadcastResponse || !broadcastResponse.txid) {
+        throw new Error("Invalid broadcast response");
       }
-    }
 
-    if (attempts >= maxAttempts) {
-      throw new Error("Transaction confirmation timeout");
+      const txId = broadcastResponse.txid;
+      console.log(`Transaction broadcast successful. Transaction ID: ${txId}`);
+
+      let status = "pending";
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (status === "pending" && attempts < maxAttempts) {
+        attempts++;
+
+        try {
+          const checkStatus = async () => {
+            const response = await fetch(
+              `https://stacks-node-api.mainnet.stacks.co/extended/v1/tx/${txId}`
+            );
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+          };
+
+          const txInfo = await fetchWithRetry(checkStatus);
+          status = txInfo.tx_status;
+
+          if (status === "success") {
+            console.log("Contract deployment successful!");
+            return {
+              success: true,
+              txId,
+              contractId: `${txOptions.senderKey}.${txOptions.contractName}`,
+            };
+          } else if (status === "failed") {
+            throw new Error(
+              `Transaction failed: ${txInfo.tx_result?.repr || "Unknown error"}`
+            );
+          }
+
+          console.log(
+            `Waiting for confirmation... (Attempt ${attempts}/${maxAttempts})`
+          );
+          await delay(10000);
+        } catch (error) {
+          console.warn(`Failed to check transaction status: ${error.message}`);
+          await delay(10000);
+        }
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error("Transaction confirmation timeout");
+      }
+    } catch (error) {
+      throw new Error(`Failed to broadcast transaction: ${error.message}`);
     }
   } catch (error) {
     console.error("Deployment failed:", error.message);
