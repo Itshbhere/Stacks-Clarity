@@ -74,15 +74,15 @@ class ReverseTokenBridge {
 
       console.log("Connecting to Stacks socket...");
 
-      // Subscribe to new blocks
-      socketClient.subscribeBlocks(async (block) => {
-        console.log("New block received:", block);
+      // Subscribe to transactions instead of blocks
+      socketClient.subscribeTransaction(async (tx) => {
+        console.log("New transaction received:", tx.tx_id);
 
         try {
-          // Process the block for relevant transactions
-          await this.processBlock(block);
+          // Process the individual transaction
+          await this.processTransaction(tx.tx_id);
         } catch (error) {
-          console.error("Error processing block:", error);
+          console.error("Error processing transaction:", error);
         }
       });
 
@@ -92,26 +92,24 @@ class ReverseTokenBridge {
     }
   }
 
-  async processBlock(block) {
-    for (const tx of block.transactions) {
-      if (this.processedTxs.has(tx.tx_id)) continue;
+  async processTransaction(txId) {
+    if (this.processedTxs.has(txId)) return;
 
-      try {
-        const txInfo = await this.getTransactionInfo(tx.tx_id);
+    try {
+      const txInfo = await this.getTransactionInfo(txId);
 
-        if (this.isRelevantTransfer(txInfo)) {
-          const transferAmount = this.extractTransferAmount(txInfo);
-          const recipient = this.extractRecipient(txInfo);
+      if (this.isRelevantTransfer(txInfo)) {
+        const transferAmount = this.extractTransferAmount(txInfo);
+        const recipient = this.extractRecipient(txInfo);
 
-          if (recipient === this.stacksReceiverAddress) {
-            await this.processSolanaTransfer(transferAmount, tx.tx_id);
-          }
+        if (recipient === this.stacksReceiverAddress) {
+          await this.processSolanaTransfer(transferAmount, txId);
         }
-
-        this.processedTxs.add(tx.tx_id);
-      } catch (error) {
-        console.error("Error processing transaction:", error);
       }
+
+      this.processedTxs.add(txId);
+    } catch (error) {
+      console.error("Error processing transaction:", error);
     }
   }
 
