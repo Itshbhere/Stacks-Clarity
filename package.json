@@ -8,6 +8,7 @@
     "@stacks/transactions": "^7.0.2",
     "@types/node": "^22.10.2",
     "create-vitewind": "^1.0.6",
+    "node-fetch": "^3.3.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.2"
   },
@@ -20,5 +21,8 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "",
+  "devDependencies": {
+    "node-gyp": "^11.0.0"
+  }
 }

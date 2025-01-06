@@ -11,7 +11,7 @@ import {
   validateStacksAddress,
   broadcastTransaction,
 } from "@stacks/transactions";
-import { STACKS_MAINNET } from "@stacks/network";
+import { STACKS_MAINNET, STACKS_TESTNET } from "@stacks/network";
 
 class TokenBridge {
   constructor(config) {
@@ -20,7 +20,7 @@ class TokenBridge {
     this.stacksPrivateKey = config.stacksPrivateKey;
     this.stacksContractAddress = config.stacksContractAddress;
     this.stacksContractName = config.stacksContractName;
-    this.network = STACKS_MAINNET;
+    this.network = STACKS_TESTNET;
     this.lastProcessedSlot = 0;
     this.previousBalances = new Map();
     this.transferQueue = [];
@@ -161,7 +161,7 @@ class TokenBridge {
   }
 
   extractRecipientAddress(transferLog) {
-    return "SP33Y26J2EZW5SJSDRKFJVE97P40ZYYR7K2BXF5Q0"; // Example address
+    return "ST33Y26J2EZW5SJSDRKFJVE97P40ZYYR7K3PATCNF"; // Example address
   }
 
   async queueStacksTransfer(transfer) {
@@ -206,7 +206,7 @@ class TokenBridge {
     console.log("Sender Key:", this.stacksPrivateKey);
     console.log("Contract Address:", this.stacksContractAddress);
     console.log("Contract Name:", this.stacksContractName);
-    const network = STACKS_MAINNET;
+    const network = STACKS_TESTNET;
 
     const txOptions = {
       senderKey: this.stacksPrivateKey,
@@ -240,7 +240,7 @@ const bridge = new TokenBridge({
   solanaTokenMintAddress: "6TpnnQFFjbyruU4q96x1mygUUynQ9uRxSAWymuAK9FYz",
   stacksPrivateKey:
     "f7984d5da5f2898dc001631453724f7fd44edaabdaa926d7df29e6ae3566492c01",
-  stacksContractAddress: "SP1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H2SAZ7CN",
+  stacksContractAddress: "ST1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H3CK5ACA",
   stacksContractName: "Krypto",
 });
 
