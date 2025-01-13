@@ -7,7 +7,6 @@ import {
 } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, createTransferInstruction } from "@solana/spl-token";
 import fs from "fs";
-import fetch from "node-fetch";
 
 const secretKeyString = fs.readFileSync("./Keypair.json", "utf8");
 const secretKey = Uint8Array.from(JSON.parse(secretKeyString));

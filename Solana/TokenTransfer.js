@@ -9,20 +9,20 @@ import {
   validateStacksAddress,
   broadcastTransaction,
 } from "@stacks/transactions";
-import { STACKS_MAINNET } from "@stacks/network";
+import { STACKS_MAINNET, STACKS_TESTNET } from "@stacks/network";
 
 // Configuration - Replace these values with your own
 const SENDER_KEY =
   "f7984d5da5f2898dc001631453724f7fd44edaabdaa926d7df29e6ae3566492c01";
-const CONTRACT_ADDRESS = "SP1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H2SAZ7CN";
+const CONTRACT_ADDRESS = "ST1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H3CK5ACA";
 const CONTRACT_NAME = "Krypto";
-const network = STACKS_MAINNET;
+const network = STACKS_TESTNET;
 const memo = "Hello World";
 
 async function transferTokens(recipientAddress, amount) {
   try {
     // Validate inputs
-    if (!recipientAddress.startsWith("SP")) {
+    if (!recipientAddress.startsWith("ST")) {
       throw new Error("Invalid recipient address");
     }
 
@@ -30,7 +30,7 @@ async function transferTokens(recipientAddress, amount) {
       throw new Error("Amount must be a positive integer");
     }
 
-    const senderAddress = "SP1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H2SAZ7CN";
+    const senderAddress = "ST1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H3CK5ACA";
     // Prepare function arguments
     const functionArgs = [
       uintCV(parseInt(amount)),
@@ -61,7 +61,7 @@ async function transferTokens(recipientAddress, amount) {
     console.log("Broadcasting transaction...");
     const broadcastResponse = await broadcastTransaction({
       transaction,
-      network: STACKS_MAINNET,
+      network: STACKS_TESTNET,
     });
 
     console.log("3");
@@ -85,7 +85,7 @@ async function transferTokens(recipientAddress, amount) {
 }
 
 // Example usage
-const recipient = "SP33Y26J2EZW5SJSDRKFJVE97P40ZYYR7K2BXF5Q0"; // Example address
+const recipient = "ST33Y26J2EZW5SJSDRKFJVE97P40ZYYR7K3PATCNF"; // Example address
 const amount = 1;
 
 transferTokens(recipient, amount)
