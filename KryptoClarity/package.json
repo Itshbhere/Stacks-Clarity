@@ -16,6 +16,7 @@
     "@stacks/profile": "^7.0.2",
     "@stacks/transactions": "^7.0.2",
     "@stacks/wallet-sdk": "^7.0.2",
+    "lucide-react": "^0.471.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.0.2"
