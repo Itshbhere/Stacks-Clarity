@@ -3,7 +3,6 @@ import {
   broadcastTransaction,
   getAddressFromPrivateKey,
   validateStacksAddress,
-  fetchNonce,
 } from "@stacks/transactions";
 import { STACKS_TESTNET } from "@stacks/network";
 import readline from "readline";
@@ -53,8 +52,11 @@ const validateAmount = (amount) => {
 // Get account nonce
 async function getAccountNonce(address) {
   try {
-    const account = 1000;
-    return account;
+    const response = await fetch(
+      `https://api.testnet.hiro.so/extended/v1/address/${address}/nonces`
+    );
+    const data = await response.json();
+    return data.possible_next_nonce;
   } catch (error) {
     console.error("Error fetching nonce:", error);
     throw new Error("Failed to fetch account nonce");
@@ -93,14 +95,10 @@ async function transferSTX(recipientAddress, amount) {
         } microSTX (including fee)`
       );
     }
-    console.log(senderAddress);
 
     // Get the current nonce
-    const nonce = await fetchNonce({
-      senderAddress,
-      network: STACKS_TESTNET,
-    });
-    console.log(`Current nonce: ${nonce}`);
+    const nonce = await getAccountNonce(senderAddress);
+    console.log(`Using nonce: ${nonce}`);
 
     const txOptions = {
       recipient: recipientAddress,
@@ -110,10 +108,10 @@ async function transferSTX(recipientAddress, amount) {
       memo: "STX Transfer",
       nonce: nonce,
       fee: 2000n,
-      anchorMode: 1, // Changed to 1 (OnChainOnly) for simpler confirmation
+      anchorMode: 1,
     };
 
-    console.log("\nCreating transaction with options:", txOptions);
+    console.log("\nCreating transaction...");
     const transaction = await makeSTXTokenTransfer(txOptions);
 
     console.log("Broadcasting transaction...");
@@ -164,6 +162,9 @@ async function main() {
     rl.close();
   }
 }
+
+// Make sure to add global fetch for Node.js
+import fetch from "node-fetch";
 
 // Run the script
 main();
