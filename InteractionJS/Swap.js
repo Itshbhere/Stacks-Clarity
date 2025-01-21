@@ -18,19 +18,16 @@ const NETWORK = STACKS_MAINNET;
 
 async function executeSwap(privateKey, stxAmount) {
   try {
-    // Get the sender address from private key
-    const senderAddress = getAddressFromPrivateKey(
-      privateKey,
-      STACKS_MAINNET // or TransactionVersion.Testnet for testnet
-    );
+    const senderAddress = getAddressFromPrivateKey(privateKey, STACKS_MAINNET);
     console.log("Sender address:", senderAddress);
-    // Create post condition with new syntax
+
+    // Create post condition using the new format
     const postConditions = [
       {
         type: "stx-postcondition",
         address: senderAddress,
-        condition: "le", // LessEqual is now 'le'
-        amount: stxAmount.toString(), // Amount must be string in new format
+        condition: "le",
+        amount: stxAmount.toString(),
       },
     ];
 
@@ -41,7 +38,6 @@ async function executeSwap(privateKey, stxAmount) {
       contractName: CONTRACT_NAME,
       functionName: "swap",
       functionArgs: [uintCV(stxAmount)],
-      senderAddress,
       senderKey: privateKey,
       validateWithAbi: true,
       network: NETWORK,
@@ -56,10 +52,7 @@ async function executeSwap(privateKey, stxAmount) {
     const transaction = await makeContractCall(txOptions);
 
     console.log("Broadcasting transaction...");
-    const broadcastResponse = await broadcastTransaction({
-      transaction,
-      network: NETWORK,
-    });
+    const broadcastResponse = await broadcastTransaction(transaction, NETWORK);
 
     console.log("Transaction broadcast successfully!");
     console.log("Transaction ID:", broadcastResponse.txid);
@@ -78,7 +71,7 @@ async function executeSwap(privateKey, stxAmount) {
 async function main() {
   const privateKey =
     "f7984d5da5f2898dc001631453724f7fd44edaabdaa926d7df29e6ae3566492c01";
-  const stxAmount = 10; // Default 1 STX
+  const stxAmount = 10; // Amount in microSTX
 
   if (!privateKey) {
     console.error("Error: STX_PRIVATE_KEY environment variable is required");
