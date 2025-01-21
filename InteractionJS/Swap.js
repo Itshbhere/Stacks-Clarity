@@ -78,7 +78,7 @@ async function executeSwap(privateKey, stxAmount) {
 
 // Script execution
 async function main() {
-  const privateKey = process.env.STX_PRIVATE_KEY;
+  const privateKey = "";
   const stxAmount = process.env.STX_AMOUNT
     ? parseInt(process.env.STX_AMOUNT)
     : 1000000; // Default 1 STX
