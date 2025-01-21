@@ -2,78 +2,41 @@ import {
   makeContractCall,
   broadcastTransaction,
   AnchorMode,
-  FungibleConditionCode,
-  standardPrincipalCV,
-  uintCV,
   PostConditionMode,
+  uintCV,
+  createStacksPrivateKey,
+  getAddressFromPrivateKey,
+  //   TransactionVersion,
   makeStandardSTXPostCondition,
-  fetchCallReadOnlyFunction,
+  FungibleConditionCode,
 } from "@stacks/transactions";
 import { STACKS_MAINNET } from "@stacks/network";
-//   import { accountsApi } from '@stacks/blockchain-api-client';
-// import { openContractCall } from "@stacks/connect";
+import dotenv from "dotenv";
 
-// Configuration
-const CONTRACT_ADDRESS = "SPXWGJQ101N1C1FYHK64TGTHN4793CHVKTJAT7VQ"; // Replace with your contract's address
-const CONTRACT_NAME = "dex"; // Replace with your contract's name
-const NETWORK = STACKS_MAINNET; // or new StacksMainnet() for mainnet
+dotenv.config();
 
-export class SwapContract {
-  constructor(userAddress) {
-    this.userAddress = userAddress;
-  }
+const CONTRACT_ADDRESS =
+  process.env.CONTRACT_ADDRESS || "SPXWGJQ101N1C1FYHK64TGTHN4793CHVKTJAT7VQ";
+const CONTRACT_NAME = "dex";
+const NETWORK = STACKS_MAINNET;
 
-  // Get contract owner
-  async getContractOwner() {
-    try {
-      const response = await this.callReadOnly("get-contract-owner");
-      return response;
-    } catch (error) {
-      console.error("Error getting contract owner:", error);
-      throw error;
-    }
-  }
+async function executeSwap(privateKey, stxAmount) {
+  try {
+    // Create private key instance
+    const privateKeyInstance = createStacksPrivateKey(privateKey);
 
-  // Set new contract owner
-  async setContractOwner(newOwnerAddress) {
-    const functionArgs = [standardPrincipalCV(newOwnerAddress)];
+    // Get the sender address from private key
+    const senderAddress = getAddressFromPrivateKey(
+      privateKey,
+      STACKS_MAINNET // or TransactionVersion.Testnet for testnet
+    );
 
-    const txOptions = {
-      contractAddress: CONTRACT_ADDRESS,
-      contractName: CONTRACT_NAME,
-      functionName: "set-contract-owner",
-      functionArgs,
-      senderAddress: this.userAddress,
-      network: NETWORK,
-      anchorMode: AnchorMode.Any,
-      postConditionMode: PostConditionMode.Allow,
-    };
-
-    const transaction = await makeContractCall(txOptions);
-    const broadcastResponse = await broadcastTransaction({
-      transaction,
-      network: this.network,
-    });
-
-    console.log("Stacks Transfer Complete");
-    console.log("Transaction ID:", broadcastResponse.txid);
-
-    return broadcastResponse.txid;
-  }
-
-  // Perform token swap
-  async swap(stxAmount) {
-    // Convert STX amount to microSTX (1 STX = 1,000,000 microSTX)
-    const microStxAmount = stxAmount; //* 1000000;
-
-    const functionArgs = [uintCV(microStxAmount)];
-
-    // Add post condition to ensure user can't spend more than intended
+    // Add post condition to protect the user
     const postConditions = [
       makeStandardSTXPostCondition(
-        this.userAddress,
+        senderAddress,
         FungibleConditionCode.LessEqual,
-        microStxAmount
+        stxAmount
       ),
     ];
 
@@ -81,72 +44,58 @@ export class SwapContract {
       contractAddress: CONTRACT_ADDRESS,
       contractName: CONTRACT_NAME,
       functionName: "swap",
-      functionArgs,
-      senderAddress: this.userAddress,
+      functionArgs: [uintCV(stxAmount)],
+      senderAddress,
+      senderKey: privateKey,
+      validateWithAbi: true,
       network: NETWORK,
       anchorMode: AnchorMode.Any,
       postConditionMode: PostConditionMode.Deny,
       postConditions,
     };
 
+    console.log("Preparing transaction...");
     const transaction = await makeContractCall(txOptions);
+
+    console.log("Broadcasting transaction...");
     const broadcastResponse = await broadcastTransaction({
       transaction,
-      network: this.network,
+      network: NETWORK,
     });
 
-    console.log("Stacks Transfer Complete");
+    console.log("Transaction broadcast successfully!");
     console.log("Transaction ID:", broadcastResponse.txid);
+    console.log(
+      `View transaction: https://explorer.stacks.co/txid/${broadcastResponse.txid}`
+    );
 
     return broadcastResponse.txid;
-  }
-
-  // Helper method for read-only contract calls
-  async callReadOnly(functionName, args = []) {
-    try {
-      const options = {
-        contractAddress: CONTRACT_ADDRESS,
-        contractName: CONTRACT_NAME,
-        functionName,
-        functionArgs: args,
-        network: NETWORK,
-      };
-
-      const result = await fetchCallReadOnlyFunction(options);
-      return result;
-    } catch (error) {
-      console.error(`Error calling ${functionName}:`, error);
-      throw error;
-    }
+  } catch (error) {
+    console.error("Swap failed:", error);
+    throw error;
   }
 }
 
-// Usage example:
-export const initializeSwap = async (userAddress) => {
-  try {
-    const swapContract = new SwapContract(userAddress);
-    return swapContract;
-  } catch (error) {
-    console.error("Error initializing swap contract:", error);
-    throw error;
+// Script execution
+async function main() {
+  const privateKey = process.env.STX_PRIVATE_KEY;
+  const stxAmount = process.env.STX_AMOUNT
+    ? parseInt(process.env.STX_AMOUNT)
+    : 1000000; // Default 1 STX
+
+  if (!privateKey) {
+    console.error("Error: STX_PRIVATE_KEY environment variable is required");
+    process.exit(1);
   }
-};
 
-// Example usage
-const example = async () => {
   try {
-    // Initialize contract with user's address
-    const userAddress = "SP1X8ZTAN1JBX148PNJY4D1BPZ1QKCKV3H2SAZ7CN"; // Replace with actual user address
-    const swapContract = await initializeSwap(userAddress);
-
-    // Get contract owner
-    const owner = await swapContract.getContractOwner();
-    console.log("Contract owner:", owner);
-
-    // Perform swap (amount in STX)
-    const swapResult = await swapContract.swap(10); // Swap 10 STX
-    console.log("Swap transaction:", swapResult);
+    console.log(`Initiating swap of ${stxAmount} microSTX`);
+    const txId = await executeSwap(privateKey, stxAmount);
+    console.log("Swap initiated successfully");
   } catch (error) {
-    console.error("Error in example:", error);
+    console.error("Failed to execute swap:", error.message);
+    process.exit(1);
   }
-};
+}
+
+main();
