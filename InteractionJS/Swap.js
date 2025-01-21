@@ -4,11 +4,7 @@ import {
   AnchorMode,
   PostConditionMode,
   uintCV,
-  createStacksPrivateKey,
   getAddressFromPrivateKey,
-  //   TransactionVersion,
-  makeStandardSTXPostCondition,
-  FungibleConditionCode,
 } from "@stacks/transactions";
 import { STACKS_MAINNET } from "@stacks/network";
 import dotenv from "dotenv";
@@ -22,23 +18,23 @@ const NETWORK = STACKS_MAINNET;
 
 async function executeSwap(privateKey, stxAmount) {
   try {
-    // Create private key instance
-    const privateKeyInstance = createStacksPrivateKey(privateKey);
-
     // Get the sender address from private key
     const senderAddress = getAddressFromPrivateKey(
       privateKey,
       STACKS_MAINNET // or TransactionVersion.Testnet for testnet
     );
-
-    // Add post condition to protect the user
+    console.log("Sender address:", senderAddress);
+    // Create post condition with new syntax
     const postConditions = [
-      makeStandardSTXPostCondition(
-        senderAddress,
-        FungibleConditionCode.LessEqual,
-        stxAmount
-      ),
+      {
+        type: "stx-postcondition",
+        address: senderAddress,
+        condition: "le", // LessEqual is now 'le'
+        amount: stxAmount.toString(), // Amount must be string in new format
+      },
     ];
+
+    console.log("Preparing transaction...", postConditions);
 
     const txOptions = {
       contractAddress: CONTRACT_ADDRESS,
@@ -53,6 +49,8 @@ async function executeSwap(privateKey, stxAmount) {
       postConditionMode: PostConditionMode.Deny,
       postConditions,
     };
+
+    console.log("Transaction options:", txOptions);
 
     console.log("Preparing transaction...");
     const transaction = await makeContractCall(txOptions);
@@ -78,10 +76,9 @@ async function executeSwap(privateKey, stxAmount) {
 
 // Script execution
 async function main() {
-  const privateKey = "";
-  const stxAmount = process.env.STX_AMOUNT
-    ? parseInt(process.env.STX_AMOUNT)
-    : 1000000; // Default 1 STX
+  const privateKey =
+    "f7984d5da5f2898dc001631453724f7fd44edaabdaa926d7df29e6ae3566492c01";
+  const stxAmount = 10; // Default 1 STX
 
   if (!privateKey) {
     console.error("Error: STX_PRIVATE_KEY environment variable is required");
