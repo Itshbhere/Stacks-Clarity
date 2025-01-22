@@ -21,12 +21,11 @@ async function executeSwap(privateKey, stxAmount) {
     const senderAddress = getAddressFromPrivateKey(privateKey, STACKS_MAINNET);
     console.log("Sender address:", senderAddress);
 
-    // Create post condition using the new format
     const postConditions = [
       {
         type: "stx-postcondition",
         address: senderAddress,
-        condition: "le",
+        condition: "lte",
         amount: stxAmount.toString(),
       },
     ];
@@ -42,7 +41,7 @@ async function executeSwap(privateKey, stxAmount) {
       validateWithAbi: true,
       network: NETWORK,
       anchorMode: AnchorMode.Any,
-      postConditionMode: PostConditionMode.Deny,
+      postConditionMode: PostConditionMode.Allow,
       postConditions,
     };
 
@@ -52,7 +51,10 @@ async function executeSwap(privateKey, stxAmount) {
     const transaction = await makeContractCall(txOptions);
 
     console.log("Broadcasting transaction...");
-    const broadcastResponse = await broadcastTransaction(transaction, NETWORK);
+    const broadcastResponse = await broadcastTransaction({
+      transaction,
+      network: STACKS_MAINNET,
+    });
 
     console.log("Transaction broadcast successfully!");
     console.log("Transaction ID:", broadcastResponse.txid);
@@ -71,7 +73,8 @@ async function executeSwap(privateKey, stxAmount) {
 async function main() {
   const privateKey =
     "f7984d5da5f2898dc001631453724f7fd44edaabdaa926d7df29e6ae3566492c01";
-  const stxAmount = 10; // Amount in microSTX
+  // Convert 0.1 STX to microSTX (0.1 * 1,000,000)
+  const stxAmount = 10000; // 0.1 STX in microSTX
 
   if (!privateKey) {
     console.error("Error: STX_PRIVATE_KEY environment variable is required");
@@ -79,7 +82,7 @@ async function main() {
   }
 
   try {
-    console.log(`Initiating swap of ${stxAmount} microSTX`);
+    console.log(`Initiating swap of ${stxAmount} microSTX (0.1 STX)`);
     const txId = await executeSwap(privateKey, stxAmount);
     console.log("Swap initiated successfully");
   } catch (error) {
