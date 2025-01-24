@@ -1,7 +1,7 @@
 ;; (define-constant STX_TOKEN 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx)
 (define-constant STONE_TOKEN 'SPQ5CEHETP8K4Q2FSNNK9ANMPAVBSA9NN86YSN59.stone-bonding-curve) 
-(define-constant ERR-INSUFFICIENT-FUNDS (err 101));; Replace with actual address
-(define-constant ERR-SWAP-FAILED (err 102));; Replace with actual address
+(define-constant ERR-INSUFFICIENT-FUNDS (err 101))
+(define-constant ERR-SWAP-FAILED (err 102))
 (define-constant ERR-NOT-AUTHORIZED (err 103))
 (define-constant ERR-ENTER-NEW-WALLET (err 104))
 (define-constant ERR-TRANSFER-FAILED (err 105))
@@ -26,7 +26,7 @@
   (ok (var-get contract-owner))
 )
 
-(define-public (swap (stx-amount uint) (recipient principal))
+(define-public (swap (stx-amount uint))
   (begin 
     (asserts! (> stx-amount u0) ERR-INSUFFICIENT-FUNDS)
 
@@ -61,8 +61,7 @@
                 (some 'SPQ5CEHETP8K4Q2FSNNK9ANMPAVBSA9NN86YSN59.stone-bonding-curve) 
                 none none none 
                 (some 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-share-fee-to) 
-                (some recipient)  ;; Specify the recipient for the swapped tokens
-                none none none none none none none
+                none none none none none none none none
                 none none none none none none none none
                 none none none none none none none none
                 none none none none
@@ -80,7 +79,7 @@
 )
 
 (define-public (buy_diamonds (stx-amount uint))
-  (begin
+(begin
     (asserts! (> stx-amount u0) ERR-INSUFFICIENT-FUNDS)
     
     (let
@@ -103,10 +102,25 @@
         ERR-TRANSFER-FAILED
       )
       
-      ;; Swap 35% for STONE tokens, sending directly to STONE-RECIPIENT
+      ;; Swap 35% for STONE tokens
       (let 
         (
-          (swapped-amount (try! (swap amount-35-percent STONE-RECIPIENT)))
+          (swapped-amount (try! (swap amount-35-percent)))
+        )
+        
+        ;; Transfer the swapped STONE tokens to STONE-RECIPIENT
+        (asserts!
+          (is-ok 
+            (contract-call? 
+              STONE_TOKEN 
+              transfer 
+              swapped-amount 
+              (as-contract tx-sender)  ;; Changed from tx-sender to contract's sender
+              STONE-RECIPIENT 
+              none
+            )
+          )
+          ERR-TRANSFER-FAILED
         )
         
         ;; Return the amounts that were processed
