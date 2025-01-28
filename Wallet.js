@@ -1,10 +1,10 @@
-const { StacksMainnet, StacksTestnet } = require("@stacks/network");
-const {
+import { StacksMainnet, StacksTestnet } from "@stacks/network";
+import {
   makeContractCall,
   broadcastTransaction,
   AnchorMode,
   FungibleConditionCode,
-} = require("@stacks/transactions");
+} from "@stacks/transactions";
 const { standardPrincipalCV, uintCV } = require("@stacks/transactions");
 require("dotenv").config();
 
