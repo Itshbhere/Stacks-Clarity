@@ -1,107 +1,170 @@
-import { StacksMainnet, StacksTestnet } from "@stacks/network";
 import {
-  makeContractCall,
+  makeSTXTokenTransfer,
   broadcastTransaction,
-  AnchorMode,
-  FungibleConditionCode,
+  getAddressFromPrivateKey,
+  validateStacksAddress,
 } from "@stacks/transactions";
-const { standardPrincipalCV, uintCV } = require("@stacks/transactions");
-require("dotenv").config();
+import { STACKS_TESTNET } from "@stacks/network";
+import readline from "readline";
 
-class STXTransfer {
-  constructor(network = "mainnet") {
-    this.network =
-      network === "mainnet" ? new StacksMainnet() : new StacksTestnet();
-  }
+// Configuration
+const SENDER_KEY =
+  "f7984d5da5f2898dc001631453724f7fd44edaabdaa926d7df29e6ae3566492c01";
+const network = STACKS_TESTNET;
 
-  async sendSTX(recipientAddress, amount, senderKey) {
-    try {
-      if (!senderKey) {
-        throw new Error("Sender private key is required");
-      }
+// Create readline interface
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
 
-      const txOptions = {
-        recipient: recipientAddress,
-        amount: amount * 1000000, // Convert to microSTX
-        senderKey: senderKey,
-        network: this.network,
-        anchorMode: AnchorMode.Any,
-        fee: 10000, // Set appropriate fee
-        nonce: 0, // You might want to fetch this dynamically
-      };
+// Promise wrapper for readline
+const question = (query) =>
+  new Promise((resolve) => rl.question(query, resolve));
 
-      const transaction = await makeSTXTokenTransfer(txOptions);
-      const broadcastResponse = await broadcastTransaction(
-        transaction,
-        this.network
-      );
-
+// Validate recipient address
+const validateRecipientAddress = (address) => {
+  try {
+    if (!address || !address.startsWith("ST")) {
       return {
-        success: true,
-        txId: broadcastResponse.txid,
-        message: `Successfully initiated transfer of ${amount} STX to ${recipientAddress}`,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-        message: `Failed to transfer STX: ${error.message}`,
+        isValid: false,
+        error: "Invalid address format. Must start with 'ST' for testnet",
       };
     }
-  }
 
-  async checkTransactionStatus(txId) {
-    try {
-      const response = await fetch(
-        `${this.network.coreApiUrl}/extended/v1/tx/${txId}`
-      );
-      const txInfo = await response.json();
-
-      return {
-        success: true,
-        status: txInfo.tx_status,
-        confirmations: txInfo.confirmations,
-        timestamp: txInfo.burn_block_time,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-        message: `Failed to check transaction status: ${error.message}`,
-      };
+    const isValid = validateStacksAddress(address);
+    if (!isValid) {
+      return { isValid: false, error: "Invalid Stacks address format" };
     }
-  }
-}
 
-// Example usage
-const transferSTX = async () => {
-  // Load environment variables
-  const SENDER_KEY = process.env.SENDER_PRIVATE_KEY;
-  const RECIPIENT_ADDRESS = process.env.RECIPIENT_ADDRESS;
-  const AMOUNT = 10; // Amount in STX
-
-  const stxTransfer = new STXTransfer("testnet"); // Use 'testnet' or 'mainnet'
-
-  // Perform transfer
-  const transferResult = await stxTransfer.sendSTX(
-    RECIPIENT_ADDRESS,
-    AMOUNT,
-    SENDER_KEY
-  );
-
-  if (transferResult.success) {
-    console.log(`Transfer initiated: ${transferResult.txId}`);
-
-    // Check transaction status after a few seconds
-    setTimeout(async () => {
-      const status = await stxTransfer.checkTransactionStatus(
-        transferResult.txId
-      );
-      console.log("Transaction status:", status);
-    }, 5000);
-  } else {
-    console.error("Transfer failed:", transferResult.message);
+    return { isValid: true, error: null };
+  } catch (err) {
+    return { isValid: false, error: "Invalid address format" };
   }
 };
 
-module.exports = STXTransfer;
+// Validate amount
+const validateAmount = (amount) => {
+  const numAmount = Number(amount);
+  return numAmount > 0 && Number.isInteger(numAmount);
+};
+
+// Get account nonce
+async function getAccountNonce(address) {
+  try {
+    const response = await fetch(
+      `https://api.testnet.hiro.so/extended/v1/address/${address}/nonces`
+    );
+    const data = await response.json();
+    return data.possible_next_nonce;
+  } catch (error) {
+    console.error("Error fetching nonce:", error);
+    throw new Error("Failed to fetch account nonce");
+  }
+}
+
+// Check STX balance
+async function checkSTXBalance(address) {
+  try {
+    const response = await fetch(
+      `https://api.testnet.hiro.so/extended/v1/address/${address}/balances`
+    );
+    const data = await response.json();
+    return BigInt(data.stx.balance);
+  } catch (error) {
+    console.error("Error fetching balance:", error);
+    throw new Error("Failed to fetch STX balance");
+  }
+}
+
+// Main transfer function
+async function transferSTX(recipientAddress, amount) {
+  try {
+    const senderAddress = getAddressFromPrivateKey(SENDER_KEY, network);
+    console.log("\nSender's address:", senderAddress);
+
+    // Check sender's balance
+    const balance = await checkSTXBalance(senderAddress);
+    console.log(`Current balance: ${balance} microSTX`);
+
+    if (balance < BigInt(amount) + BigInt(2000)) {
+      // amount + minimum fee
+      throw new Error(
+        `Insufficient balance. You need at least ${
+          amount + 2000
+        } microSTX (including fee)`
+      );
+    }
+
+    // Get the current nonce
+    const nonce = await getAccountNonce(senderAddress);
+    console.log(`Using nonce: ${nonce}`);
+
+    const txOptions = {
+      recipient: recipientAddress,
+      amount: BigInt(amount),
+      senderKey: SENDER_KEY,
+      network,
+      memo: "STX Transfer",
+      nonce: nonce,
+      fee: 2000n,
+      anchorMode: 1,
+    };
+
+    console.log("\nCreating transaction...");
+    const transaction = await makeSTXTokenTransfer(txOptions);
+
+    console.log("Broadcasting transaction...");
+    const broadcastResponse = await broadcastTransaction({
+      transaction,
+      network,
+    });
+
+    if (broadcastResponse.error) {
+      throw new Error(`Broadcast error: ${broadcastResponse.error}`);
+    }
+
+    console.log("\nTransaction successful!");
+    console.log("Transaction ID:", broadcastResponse.txid);
+    console.log(
+      `View in Explorer: https://explorer.stacks.co/txid/${broadcastResponse.txid}?chain=testnet`
+    );
+
+    return broadcastResponse.txid;
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Main execution
+async function main() {
+  try {
+    console.log("=== Native STX Transfer Script (Testnet) ===\n");
+    console.log(
+      "Note: Amount should be in microSTX (1 STX = 1,000,000 microSTX)\n"
+    );
+
+    const recipientAddress = await question("Enter recipient address: ");
+    const { isValid, error } = validateRecipientAddress(recipientAddress);
+    if (!isValid) {
+      throw new Error(error);
+    }
+
+    const amount = await question("Enter amount to transfer (in microSTX): ");
+    if (!validateAmount(amount)) {
+      throw new Error("Amount must be a positive integer");
+    }
+
+    await transferSTX(recipientAddress, amount);
+  } catch (error) {
+    console.error("\nError:", error.message);
+  } finally {
+    rl.close();
+  }
+}
+
+// Make sure to add global fetch for Node.js
+import fetch from "node-fetch";
+
+// Run the script
+main();
